@@ -3,7 +3,7 @@ const app = express();
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 require('dotenv').config()
-const stripe = require("stripe")('process.env.STRIPE_SECRET_KEY')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -32,28 +32,11 @@ async function run() {
     const foodCollection = client.db("bistroBossFood").collection("items");
     const userCollection = client.db("bistroBossFood").collection("users");
     const cartCollection = client.db("bistroBossFood").collection("carts");
+    const paymentsCollection = client.db("bistroBossFood").collection("payments");
     // const reviewCollection = client.db("bistroDb").collection("reviews");
 
 
-    // payment
-    app.post("/create-payment-intent",async (req,res) => {
-      const {price} = req.body;
-      const amount = parseInt(price * 100)
-
-
-
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: amount,
-        currency: "usd",
-        // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
-        automatic_payment_methods: ["card"]
-      });
-
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
-    
-    })
+ 
 
     // jwt 
     app.post("/jwt",async (req,res) => {
@@ -195,6 +178,60 @@ const query = {email: emailss}
     //     const result = await reviewCollection.find().toArray();
     //     res.send(result);
     // })
+
+
+
+
+       // payment
+       app.post("/create-payment-intent",async (req,res) => {
+        const {price} = req.body;
+
+
+        // if (!price || typeof price !== 'number') {
+        //   return res.status(400).send({ error: 'Invalid or missing price' });
+        // }
+
+
+
+        const amount = parseInt(price * 100)
+  console.log(amount,"amount inside");
+  
+  
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount:amount,
+          currency: "usd",
+          // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+          payment_method_types: ['card']
+        });
+  
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      
+      })
+
+// 
+app.get('/payments/:email', verifyToken, async (req, res) => {
+  const query = { email: req.params.email }
+  if (req.params.email !== req.decoded.email) {
+    return res.status(403).send({ message: 'forbidden access' });
+  }
+  const result = await paymentCollection.find(query).toArray();
+  res.send(result);
+})
+// 
+
+    app.post('/payments',async(req,res)=>{
+      const payment =req.body;
+      const paymentResult = await paymentsCollection.insertOne(payment)
+console.log("payment info",payment);
+const query = {_id:{
+  $in:payment.cartIds.map(id => new ObjectId(id))
+}}
+const deleteResult = await cartCollection.deleteMany(query)
+res.send({paymentResult,deleteResult})
+
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
